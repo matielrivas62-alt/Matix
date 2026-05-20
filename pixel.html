@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Escape Pixel - Cyberpunk Edition</title>
+  <style>
+    :root {
+      --bg: #060814;
+      --panel: rgba(11, 19, 43, 0.75);
+      --text: #f0f5ff;
+      --accent: #00f0ff;
+      --player: #ff007f;
+      --danger: #ff3b30;
+      --good: #39ff14;
+      --shield: #a855f7;
+      --shadow: 0 0 25px rgba(0, 240, 255, 0.15);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; width: 100%; height: 100%;
+      overflow: hidden;
+      background: linear-gradient(180deg, #040610 0%, #0c102b 100%);
+      font-family: 'Courier New', Courier, monospace;
+      font-weight: bold;
+      color: var(--text);
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    #gameWrap {
+      position: relative; width: 100vw; height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+    }
+    canvas {
+      background: #02040a;
+      border: 3px solid var(--accent);
+      border-radius: 12px;
+      box-shadow: 0 0 40px rgba(0,240,255,0.25), inset 0 0 20px rgba(0,240,255,0.1);
+      display: block; max-width: 100vw; max-height: 100vh;
+    }
+    .hud {
+      position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 20px; padding: 10px 22px;
+      background: var(--panel);
+      border: 2px solid var(--accent); box-shadow: var(--shadow);
+      backdrop-filter: blur(12px); z-index: 5;
+      clip-path: polygon(10px 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%);
+    }
+    .hud .item { font-size: 15px; letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
+    .hud b { color: var(--accent); text-shadow: 0 0 8px var(--accent); }
+    .hud b.danger { color: var(--danger); text-shadow: 0 0 8px var(--danger); }
+    .controls {
+      position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%);
+      display: flex; gap: 30px; z-index: 6;
+    }
+    .touchBtn {
+      width: 80px; height: 80px;
+      border: 2px solid var(--accent);
+      background: rgba(4,6,16,0.85);
+      color: var(--accent); font-size: 32px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: var(--shadow); cursor: pointer;
+      transition: all 0.1s ease;
+      text-shadow: 0 0 8px var(--accent);
+    }
+    .touchBtn:active {
+      background: var(--accent); color: var(--bg);
+      box-shadow: 0 0 25px var(--accent); transform: scale(0.95);
+    }
+    .hint {
+      position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%);
+      font-size: 12px; letter-spacing: 0.5px; color: rgba(0,240,255,0.7);
+      background: rgba(6,8,20,0.6); padding: 6px 16px;
+      border-left: 3px solid var(--accent); border-right: 3px solid var(--accent); z-index: 5;
+    }
+    .overlay {
+      position: absolute; inset: 0; display: none;
+      align-items: center; justify-content: center;
+      background: rgba(2,4,10,0.88); backdrop-filter: blur(6px); z-index: 10;
+    }
+    .overlay.show { display: flex; }
+    .card {
+      width: min(94vw, 460px); background: #060814; padding: 30px;
+      text-align: center; position: relative;
+    }
+    .card.danger-card { border: 3px solid var(--danger); box-shadow: 0 0 50px rgba(255,59,48,0.3); }
+    .card.start-card  { border: 3px solid var(--accent); box-shadow: 0 0 50px rgba(0,240,255,0.25); }
+    .card::before {
+      content: ''; position: absolute;
+      top: -3px; left: -3px; right: -3px; bottom: -3px;
+      border: 1px solid var(--accent); pointer-events: none; opacity: 0.4;
+    }
+    .card h1 { margin: 0 0 8px; font-size: 38px; text-transform: uppercase; letter-spacing: 2px; }
+    .card h1.red   { color: var(--danger); text-shadow: 0 0 15px var(--danger); }
+    .card h1.cyan  { color: var(--accent); text-shadow: 0 0 15px var(--accent); }
+    .card .subtitle { font-size: 13px; color: rgba(0,240,255,0.6); margin: 0 0 20px; letter-spacing: 3px; }
+    .card p { margin: 10px 0; line-height: 1.6; font-size: 15px; color: #cbd5e1; }
+    .card p b { color: var(--accent); }
+    .card .legend { display: flex; flex-direction: column; gap: 8px; margin: 18px 0; text-align: left; }
+    .card .legend-item { display: flex; align-items: center; gap: 12px; font-size: 13px; color: #94a3b8; }
+    .legend-box { width: 22px; height: 22px; flex-shrink: 0; }
+    .btn {
+      margin-top: 18px; padding: 14px 28px;
+      border: 2px solid var(--good); background: transparent;
+      color: var(--good); font-family: 'Courier New', Courier, monospace;
+      font-weight: bold; font-size: 16px; text-transform: uppercase;
+      cursor: pointer; box-shadow: 0 0 15px rgba(57,255,20,0.2);
+      transition: all 0.2s ease; display: inline-block;
+    }
+    .btn:hover, .btn:active { background: var(--good); color: var(--bg); box-shadow: 0 0 25px var(--good); }
+    .score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0; }
+    .score-item { background: rgba(0,240,255,0.05); border: 1px solid rgba(0,240,255,0.15); padding: 10px; }
+    .score-item .label { font-size: 11px; color: rgba(0,240,255,0.6); letter-spacing: 1px; }
+    .score-item .val   { font-size: 20px; color: var(--accent); text-shadow: 0 0 8px var(--accent); }
+    @media (max-width: 700px) {
+      .hud { top: 8px; gap: 10px; padding: 7px 14px; }
+      .hud .item { font-size: 12px; }
+      .hint { bottom: 110px; font-size: 11px; }
+      .touchBtn { width: 68px; height: 68px; font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+<div id="gameWrap">
+  <canvas id="gameCanvas" width="900" height="540"></canvas>
+
+  <div class="hud">
+    <div class="item">SCORE: <b id="scoreText">0</b></div>
+    <div class="item">TIME: <b id="timeText">0</b>s</div>
+    <div class="item">ORBS: <b id="gemsText">0</b></div>
+    <div class="item">LIVES: <b id="livesText" class="danger">♥♥♥</b></div>
+  </div>
+
+  <div class="hint">CONTROLS: ← → / A / D &nbsp;|&nbsp; MOBILE: TAP NEON BUTTONS</div>
+
+  <div class="controls">
+    <button class="touchBtn" id="leftBtn">◀</button>
+    <button class="touchBtn" id="rightBtn">▶</button>
+  </div>
+
+  <!-- PANTALLA DE INICIO -->
+  <div class="overlay show" id="startOverlay">
+    <div class="card start-card">
+      <h1 class="cyan">ESCAPE PIXEL</h1>
+      <div class="subtitle">// CYBERPUNK EDITION v2.0 //</div>
+      <div class="legend">
+        <div class="legend-item">
+          <canvas class="legend-box" id="lc1"></canvas>
+          <span>RED CORE DATA — avoid at all costs</span>
+        </div>
+        <div class="legend-item">
+          <canvas class="legend-box" id="lc2"></canvas>
+          <span>QUANTUM ORB — collect for +15 pts</span>
+        </div>
+        <div class="legend-item">
+          <canvas class="legend-box" id="lc3"></canvas>
+          <span>SHIELD MATRIX — 3s of invincibility</span>
+        </div>
+        <div class="legend-item">
+          <canvas class="legend-box" id="lc4"></canvas>
+          <span>LATERAL DRONE — moves side to side</span>
+        </div>
+      </div>
+      <p>You have <b>3 lives</b>. Speed increases every 15 seconds.</p>
+      <p id="hsBestText" style="display:none">BEST SCORE: <b id="hsBest">0</b></p>
+      <button class="btn" id="startBtn">JACK IN &gt;&gt;</button>
+    </div>
+  </div>
+
+  <!-- PANTALLA GAME OVER -->
+  <div class="overlay" id="gameOverOverlay">
+    <div class="card danger-card">
+      <h1 class="red">CRITICAL FAILURE</h1>
+      <div class="score-grid">
+        <div class="score-item"><div class="label">FINAL SCORE</div><div class="val" id="finalScoreText">0</div></div>
+        <div class="score-item"><div class="label">TIME SURVIVED</div><div class="val" id="finalTimeText">0s</div></div>
+        <div class="score-item"><div class="label">ORBS COLLECTED</div><div class="val" id="finalGemsText">0</div></div>
+        <div class="score-item"><div class="label">HIGH SCORE</div><div class="val" id="finalHSText">0</div></div>
+      </div>
+      <p id="newHSBadge" style="display:none; color:#39ff14; text-shadow:0 0 10px #39ff14; font-size:18px;">★ NEW HIGH SCORE ★</p>
+      <button class="btn" id="restartBtn">REBOOT SYSTEM</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* =============================================
+     ESCAPE PIXEL — CYBERPUNK EDITION v2.0
+     JavaScript Engine — IA 3
+  ============================================= */
+
+  // --- REFS DOM ---
+  const canvas   = document.getElementById("gameCanvas");
+  const ctx      = canvas.getContext("2d");
+  const scoreText  = document.getElementById("scoreText");
+  const timeText   = document.getElementById("timeText");
+  const gemsText   = document.getElementById("gemsText");
+  const livesText  = document.getElementById("livesText");
+  const startOverlay   = document.getElementById("startOverlay");
+  const startBtn       = document.getElementById("startBtn");
+  const gameOverOverlay= document.getElementById("gameOverOverlay");
+  const finalScoreText = document.getElementById("finalScoreText");
+  const finalTimeText  = document.getElementById("finalTimeText");
+  const finalGemsText  = document.getElementById("finalGemsText");
+  const finalHSText    = document.getElementById("finalHSText");
+  const newHSBadge     = document.getElementById("newHSBadge");
+  const restartBtn     = document.getElementById("restartBtn");
+  const leftBtn        = document.getElementById("leftBtn");
+  const rightBtn       = document.getElementById("rightBtn");
+  const hsBestText     = document.getElementById("hsBestText");
+  const hsBestEl       = document.getElementById("hsBest");
+
+  // --- ESTADO GLOBAL ---
+  // STATES: "start" | "playing" | "dead" | "gameover"
+  let gameState = "start";
+  let highScore = 0;
+
+  // --- MUNDO ---
+  const world = { width: canvas.width, height: canvas.height, groundY: canvas.height - 58 };
+
+  // --- JUGADOR ---
+  const player = {
+    x: 0, y: 0, w: 40, h: 40,
+    speed: 370, vx: 0,
+    lives: 3,
+    shielded: false,
+    shieldTimer: 0,
+    invincible: false,      // breve invencibilidad tras golpe
+    invincibleTimer: 0,
+    blinkTimer: 0
+  };
+
+  // --- COLECCIONES ---
+  let obstacles    = [];   // { x, y, w, h, speed, lateral?, vx? }
+  let collectibles = [];   // { x, y, w, h, speed, pulse, type: "orb"|"shield" }
+  let particles    = [];
+  let stars        = [];
+  let scanlines    = [];   // efecto CRT scrolling
+
+  // --- CONTADORES ---
+  let score        = 0;
+  let gems         = 0;
+  let survivalTime = 0;
+  let elapsed      = 0;
+  let lastTime     = 0;
+  let obstacleTimer     = 0;
+  let collectibleTimer  = 0;
+  let shieldSpawnTimer  = 0;
+  let animFrame    = null;
+
+  // --- INPUT ---
+  const keys = { left: false, right: false };
+
+  /* ==================== HELPERS ==================== */
+  function rand(min, max) { return Math.random() * (max - min) + min; }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function rectsOverlap(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x &&
+           a.y < b.y + b.h && a.y + a.h > b.y;
+  }
+  function livesDisplay(n) { return "♥".repeat(Math.max(0, n)) + "♡".repeat(Math.max(0, 3 - n)); }
+
+  /* ==================== INICIALIZACIÓN ==================== */
+  function resetGame() {
+    obstacles = []; collectibles = []; particles = [];
+    score = 0; gems = 0; survivalTime = 0; elapsed = 0;
+    obstacleTimer = 0; collectibleTimer = 0; shieldSpawnTimer = 0;
+
+    player.x = world.width / 2 - player.w / 2;
+    player.y = world.groundY - player.h;
+    player.vx = 0;
+    player.lives = 3;
+    player.shielded = false; player.shieldTimer = 0;
+    player.invincible = false; player.invincibleTimer = 0; player.blinkTimer = 0;
+
+    createStars();
+    updateHUD();
+    gameState = "playing";
+    startOverlay.classList.remove("show");
+    gameOverOverlay.classList.remove("show");
+    lastTime = performance.now();
+    if (animFrame) cancelAnimationFrame(animFrame);
+    animFrame = requestAnimationFrame(gameLoop);
+  }
+
+  function updateHUD() {
+    scoreText.textContent  = Math.floor(score);
+    timeText.textContent   = Math.floor(survivalTime);
+    gemsText.textContent   = gems;
+    livesText.textContent  = livesDisplay(player.lives);
+    livesText.className    = player.lives <= 1 ? "danger" : "";
+  }
+
+  /* ==================== STARS & SCANLINES ==================== */
+  function createStars() {
+    stars = [];
+    for (let i = 0; i < 70; i++) {
+      stars.push({ x: Math.random() * world.width, y: Math.random() * world.height,
+                   r: Math.random() * 1.8 + 0.3, speed: rand(12, 40), twinkle: Math.random() * Math.PI * 2 });
+    }
+    scanlines = [];
+    for (let i = 0; i < 6; i++) {
+      scanlines.push({ y: Math.random() * world.height, speed: rand(40, 90), alpha: rand(0.03, 0.07) });
+    }
+  }
+
+  /* ==================== SPAWNERS ==================== */
+  function spawnObstacle() {
+    const isLateral = survivalTime > 20 && Math.random() < 0.28;
+    const size  = rand(24, 52);
+    const x     = rand(10, world.width - size - 10);
+    const speedBonus = Math.min(survivalTime * 6, 180);
+    const speed = rand(170, 270) + speedBonus;
+
+    const o = { x, y: -size - rand(0, 30), w: size, h: size, speed, lateral: isLateral };
+    if (isLateral) {
+      o.vx = rand(60, 130) * (Math.random() < 0.5 ? 1 : -1);
+    }
+    obstacles.push(o);
+  }
+
+  function spawnCollectible(type) {
+    const size = type === "shield" ? 24 : 20;
+    const x    = rand(16, world.width - size - 16);
+    collectibles.push({ x, y: -size - rand(0, 20), w: size, h: size,
+                        speed: rand(120, 175), pulse: Math.random() * Math.PI * 2, type });
+  }
+
+  function spawnParticles(x, y, color, amount) {
+    for (let i = 0; i < amount; i++) {
+      particles.push({
+        x, y,
+        vx: rand(-200, 200), vy: rand(-200, 50),
+        life: rand(0.35, 0.8), maxLife: 0,
+        size: rand(2.5, 6), color
+      });
+      particles[particles.length - 1].maxLife = particles[particles.length - 1].life;
+    }
+  }
+
+  /* ==================== UPDATE LOGIC ==================== */
+  function updatePlayer(dt) {
+    let move = 0;
+    if (keys.left)  move -= 1;
+    if (keys.right) move += 1;
+    player.vx = move * player.speed;
+    player.x += player.vx * dt;
+    player.x = clamp(player.x, 6, world.width - player.w - 6);
+
+    if (player.shielded) {
+      player.shieldTimer -= dt;
+      if (player.shieldTimer <= 0) { player.shielded = false; }
+    }
+    if (player.invincible) {
+      player.invincibleTimer -= dt;
+      player.blinkTimer += dt;
+      if (player.invincibleTimer <= 0) { player.invincible = false; player.blinkTimer = 0; }
+    }
+  }
+
+  function updateObstacles(dt) {
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+      const o = obstacles[i];
+      o.y += o.speed * dt;
+      if (o.lateral) {
+        o.x += o.vx * dt;
+        if (o.x <= 0)              { o.x = 0;                    o.vx = Math.abs(o.vx); }
+        if (o.x + o.w >= world.width) { o.x = world.width - o.w; o.vx = -Math.abs(o.vx); }
+      }
+      if (o.y > world.height + 80) obstacles.splice(i, 1);
+    }
+  }
+
+  function updateCollectibles(dt) {
+    for (let i = collectibles.length - 1; i >= 0; i--) {
+      const c = collectibles[i];
+      c.y += c.speed * dt;
+      c.pulse += dt * 7;
+      if (c.y > world.height + 50) collectibles.splice(i, 1);
+    }
+  }
+
+  function updateParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 260 * dt;
+      p.life -= dt;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+  }
+
+  function updateStars(dt) {
+    for (const s of stars) {
+      s.y += s.speed * dt;
+      s.twinkle += dt * 2;
+      if (s.y > world.height) { s.y = 0; s.x = Math.random() * world.width; }
+    }
+    for (const sl of scanlines) {
+      sl.y += sl.speed * dt;
+      if (sl.y > world.height) sl.y = 0;
+    }
+  }
+
+  function handleCollisions() {
+    const pb = { x: player.x + 3, y: player.y + 3, w: player.w - 6, h: player.h - 6 };
+
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+      if (!rectsOverlap(pb, obstacles[i])) continue;
+      if (player.shielded) {
+        // escudo absorbe el impacto
+        spawnParticles(obstacles[i].x + obstacles[i].w/2, obstacles[i].y + obstacles[i].h/2, "#a855f7", 20);
+        obstacles.splice(i, 1);
+        player.shielded = false;
+        continue;
+      }
+      if (player.invincible) continue;
+
+      // Golpe real
+      spawnParticles(player.x + player.w/2, player.y + player.h/2, "#ff3b30", 22);
+      player.lives -= 1;
+      player.invincible = true;
+      player.invincibleTimer = 1.8;
+      player.blinkTimer = 0;
+      obstacles.splice(i, 1);
+
+      if (player.lives <= 0) { endGame(); return; }
+    }
+
+    for (let i = collectibles.length - 1; i >= 0; i--) {
+      if (!rectsOverlap(pb, collectibles[i])) continue;
+      const c = collectibles[i];
+      if (c.type === "orb") {
+        spawnParticles(c.x + c.w/2, c.y + c.h/2, "#39ff14", 14);
+        score += 15;
+        gems  += 1;
+      } else if (c.type === "shield") {
+        spawnParticles(c.x + c.w/2, c.y + c.h/2, "#a855f7", 18);
+        player.shielded    = true;
+        player.shieldTimer = 3.0;
+      }
+      collectibles.splice(i, 1);
+    }
+  }
+
+  function updateDifficulty(dt) {
+    obstacleTimer    += dt;
+    collectibleTimer += dt;
+    shieldSpawnTimer += dt;
+    elapsed += dt;
+    survivalTime = elapsed;
+
+    // Score pasivo sube con el tiempo
+    const multiplier = 1 + Math.floor(survivalTime / 15) * 0.3;
+    score += dt * 10 * multiplier;
+
+    const spawnRate = Math.max(0.30, 0.90 - survivalTime * 0.011);
+    if (obstacleTimer >= spawnRate) {
+      const batch = survivalTime > 40 ? 2 : 1;
+      for (let b = 0; b < batch; b++) spawnObstacle();
+      obstacleTimer = 0;
+    }
+    if (collectibleTimer >= 2.4) { spawnCollectible("orb"); collectibleTimer = 0; }
+    if (shieldSpawnTimer  >= 14)  { spawnCollectible("shield"); shieldSpawnTimer = rand(10, 18); }
+  }
+
+  function endGame() {
+    gameState = "gameover";
+    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+
+    const isNewHS = score > highScore;
+    if (isNewHS) highScore = Math.floor(score);
+
+    finalScoreText.textContent = Math.floor(score);
+    finalTimeText.textContent  = Math.floor(survivalTime) + "s";
+    finalGemsText.textContent  = gems;
+    finalHSText.textContent    = highScore;
+    newHSBadge.style.display   = isNewHS ? "block" : "none";
+    gameOverOverlay.classList.add("show");
+
+    // Actualiza high score en pantalla de inicio
+    hsBestEl.textContent     = highScore;
+    hsBestText.style.display = "block";
+  }
+
+  /* ==================== DRAW ==================== */
+  function drawBackground() {
+    ctx.clearRect(0, 0, world.width, world.height);
+    ctx.fillStyle = "#02040a";
+    ctx.fillRect(0, 0, world.width, world.height);
+
+    // Estrellas (con twinkle)
+    for (const s of stars) {
+      const alpha = 0.25 + Math.abs(Math.sin(s.twinkle)) * 0.35;
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(0,240,255,${alpha.toFixed(2)})`;
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Cyber Grid
+    ctx.strokeStyle = "rgba(0,240,255,0.06)";
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= world.width; x += 40) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, world.height); ctx.stroke();
+    }
+    for (let y = 0; y <= world.height; y += 40) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(world.width, y); ctx.stroke();
+    }
+
+    // Scanlines (CRT effect)
+    for (const sl of scanlines) {
+      ctx.fillStyle = `rgba(0,240,255,${sl.alpha})`;
+      ctx.fillRect(0, sl.y, world.width, 3);
+    }
+
+    // Suelo neón
+    const g = world.groundY;
+    ctx.fillStyle = "rgba(10,14,38,0.65)";
+    ctx.fillRect(0, g, world.width, world.height - g);
+
+    ctx.save();
+    ctx.shadowColor = "#00f0ff"; ctx.shadowBlur = 14;
+    ctx.strokeStyle = "#00f0ff"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(0, g); ctx.lineTo(world.width, g); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawPlayer() {
+    // Blink durante invencibilidad
+    if (player.invincible && Math.floor(player.blinkTimer * 8) % 2 === 0) return;
+
+    ctx.save();
+    // Aura de escudo
+    if (player.shielded) {
+      const pulse = 0.7 + Math.sin(Date.now() * 0.005) * 0.3;
+      ctx.shadowColor = "#a855f7"; ctx.shadowBlur = 22 * pulse;
+      ctx.strokeStyle = `rgba(168,85,247,${pulse.toFixed(2)})`;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(player.x - 5, player.y - 5, player.w + 10, player.h + 10);
+    }
+    ctx.shadowColor = "#ff007f"; ctx.shadowBlur = 18;
+    ctx.fillStyle   = "#ff007f";
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+    ctx.restore();
+
+    // Detalles: visor
+    ctx.save();
+    ctx.shadowColor = "#00f0ff"; ctx.shadowBlur = 8;
+    ctx.fillStyle   = "#00f0ff";
+    ctx.fillRect(player.x + 6, player.y + 10, player.w - 12, 6);
+    ctx.restore();
+
+    // "Patas" pixel
+    ctx.fillStyle = "#060814";
+    ctx.fillRect(player.x + 4,            player.y + 24, 8, 8);
+    ctx.fillRect(player.x + player.w - 12, player.y + 24, 8, 8);
+  }
+
+  function drawObstacles() {
+    for (const o of obstacles) {
+      ctx.save();
+      const isLat = o.lateral;
+      ctx.shadowColor = isLat ? "#ff9800" : "#ff3b30";
+      ctx.shadowBlur  = 18;
+      ctx.fillStyle   = isLat ? "#ff6d00" : "#ff3b30";
+      ctx.fillRect(o.x, o.y, o.w, o.h);
+      ctx.restore();
+
+      // Núcleo
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(o.x + o.w * 0.28, o.y + o.h * 0.28, o.w * 0.44, o.h * 0.44);
+
+      // Indicador "lateral" 
+      if (isLat) {
+        ctx.save();
+        ctx.fillStyle = "#ff9800";
+        ctx.font = "bold 9px 'Courier New'";
+        ctx.textAlign = "center";
+        ctx.fillText("◄►", o.x + o.w / 2, o.y - 4);
+        ctx.restore();
+      }
+    }
+  }
+
+  function drawCollectibles() {
+    for (const c of collectibles) {
+      const pulse = 1 + Math.sin(c.pulse) * 0.18;
+      const half  = (c.w * pulse) / 2;
+      const cx    = c.x + c.w / 2;
+      const cy    = c.y + c.h / 2;
+
+      ctx.save();
+      if (c.type === "orb") {
+        ctx.shadowColor = "#39ff14"; ctx.shadowBlur = 20;
+        ctx.fillStyle   = "#39ff14";
+        ctx.beginPath();
+        ctx.moveTo(cx,        cy - half);
+        ctx.lineTo(cx + half, cy);
+        ctx.lineTo(cx,        cy + half);
+        ctx.lineTo(cx - half, cy);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        // Shield — hexágono aproximado
+        ctx.shadowColor = "#a855f7"; ctx.shadowBlur = 22;
+        ctx.fillStyle   = "#a855f7";
+        ctx.beginPath();
+        for (let j = 0; j < 6; j++) {
+          const angle = (Math.PI / 3) * j - Math.PI / 6;
+          const px = cx + half * Math.cos(angle);
+          const py = cy + half * Math.sin(angle);
+          j === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        // Ícono "S"
+        ctx.fillStyle = "#fff";
+        ctx.font = `bold ${Math.floor(c.w * 0.55)}px 'Courier New'`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("S", cx, cy);
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawParticles() {
+    for (const p of particles) {
+      const alpha = Math.max(0, p.life / p.maxLife);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle   = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur  = 5;
+      ctx.fillRect(p.x, p.y, p.size, p.size);
+      ctx.restore();
+    }
+  }
+
+  function drawShieldTimer() {
+    if (!player.shielded) return;
+    const ratio = player.shieldTimer / 3.0;
+    const barW  = 120;
+    const bx    = player.x + player.w / 2 - barW / 2;
+    const by    = player.y - 14;
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(bx, by, barW, 7);
+    ctx.fillStyle = "#a855f7";
+    ctx.fillRect(bx, by, barW * ratio, 7);
+    ctx.font = "bold 9px 'Courier New'";
+    ctx.fillStyle = "#fff";
+    ctx.textAlign = "center";
+    ctx.fillText("SHIELD", player.x + player.w / 2, by - 2);
+  }
+
+  function drawHint() {
+    if (survivalTime < 2.5) {
+      ctx.save();
+      ctx.fillStyle   = "#00f0ff";
+      ctx.shadowColor = "#00f0ff";
+      ctx.shadowBlur  = 10;
+      ctx.font        = "bold 14px 'Courier New'";
+      ctx.textAlign   = "center";
+      ctx.fillText("EVADE RED CORES · COLLECT ORBS · GRAB SHIELDS", world.width / 2, 82);
+      ctx.restore();
+    }
+  }
+
+  function drawSpeedLevel() {
+    const lvl = 1 + Math.floor(survivalTime / 15);
+    ctx.save();
+    ctx.font      = "bold 12px 'Courier New'";
+    ctx.fillStyle = lvl > 3 ? "#ff3b30" : "rgba(0,240,255,0.55)";
+    ctx.textAlign = "right";
+    ctx.fillText(`SPEED LVL ${lvl}`, world.width - 12, world.height - 8);
+    ctx.restore();
+  }
+
+  /* ==================== GAME LOOP ==================== */
+  function gameLoop(timestamp) {
+    if (gameState !== "playing") return;
+
+    const dt = Math.min((timestamp - lastTime) / 1000, 0.033);
+    lastTime = timestamp;
+
+    updateDifficulty(dt);
+    updatePlayer(dt);
+    updateObstacles(dt);
+    updateCollectibles(dt);
+    updateParticles(dt);
+    updateStars(dt);
+    handleCollisions();
+    updateHUD();
+
+    drawBackground();
+    drawCollectibles();
+    drawObstacles();
+    drawParticles();
+    drawPlayer();
+    drawShieldTimer();
+    drawHint();
+    drawSpeedLevel();
+
+    animFrame = requestAnimationFrame(gameLoop);
+  }
+
+  /* ==================== INPUT ==================== */
+  function setKey(e, state) {
+    const k = e.key.toLowerCase();
+    if (k === "arrowleft"  || k === "a") { keys.left  = state; e.preventDefault(); }
+    if (k === "arrowright" || k === "d") { keys.right = state; e.preventDefault(); }
+  }
+  window.addEventListener("keydown", e => setKey(e, true));
+  window.addEventListener("keyup",   e => setKey(e, false));
+
+  function bindTouch(btn, dir) {
+    const on  = e => { e.preventDefault(); keys[dir] = true; };
+    const off = e => { e.preventDefault(); keys[dir] = false; };
+    btn.addEventListener("touchstart",  on,  { passive: false });
+    btn.addEventListener("touchend",    off, { passive: false });
+    btn.addEventListener("touchcancel", off, { passive: false });
+    btn.addEventListener("mousedown",   on);
+    btn.addEventListener("mouseup",     off);
+    btn.addEventListener("mouseleave",  off);
+  }
+  bindTouch(leftBtn,  "left");
+  bindTouch(rightBtn, "right");
+
+  /* ==================== RESIZE ==================== */
+  function resizeCanvas() {
+    const aw = window.innerWidth - 20, ah = window.innerHeight - 20;
+    const aspect = world.width / world.height;
+    let dw = aw, dh = dw / aspect;
+    if (dh > ah) { dh = ah; dw = dh * aspect; }
+    canvas.style.width  = Math.floor(dw) + "px";
+    canvas.style.height = Math.floor(dh) + "px";
+  }
+  window.addEventListener("resize", resizeCanvas);
+
+  /* ==================== BUTTONS ==================== */
+  startBtn.addEventListener("click", resetGame);
+  restartBtn.addEventListener("click", resetGame);
+
+  /* ==================== LEGEND MINI-CANVAS ==================== */
+  function drawLegendItems() {
+    const items = [
+      { id: "lc1", fn: (c, x) => { c.fillStyle="#ff3b30"; c.fillRect(0,0,22,22); c.fillStyle="#fff"; c.fillRect(5,5,12,12); } },
+      { id: "lc2", fn: (c, x) => {
+        c.fillStyle="#39ff14"; c.shadowColor="#39ff14"; c.shadowBlur=6;
+        c.beginPath(); c.moveTo(11,2); c.lineTo(20,11); c.lineTo(11,20); c.lineTo(2,11); c.closePath(); c.fill();
+      }},
+      { id: "lc3", fn: (c) => {
+        c.fillStyle="#a855f7"; c.shadowColor="#a855f7"; c.shadowBlur=6;
+        c.beginPath();
+        for(let j=0;j<6;j++){const a=(Math.PI/3)*j-Math.PI/6,px=11+10*Math.cos(a),py=11+10*Math.sin(a);j?c.lineTo(px,py):c.moveTo(px,py);}
+        c.closePath(); c.fill();
+        c.fillStyle="#fff"; c.font="bold 11px monospace"; c.textAlign="center"; c.textBaseline="middle"; c.fillText("S",11,11);
+      }},
+      { id: "lc4", fn: (c) => {
+        c.fillStyle="#ff6d00"; c.shadowColor="#ff6d00"; c.shadowBlur=6;
+        c.fillRect(0,0,22,22); c.fillStyle="#fff"; c.fillRect(5,5,12,12);
+        c.fillStyle="#ff9800"; c.font="bold 8px monospace"; c.textAlign="center"; c.fillText("◄►",11,20);
+      }}
+    ];
+    items.forEach(({ id, fn }) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.width = 22; el.height = 22;
+      const lc = el.getContext("2d");
+      lc.clearRect(0,0,22,22);
+      fn(lc);
+    });
+  }
+
+  /* ==================== BOOT ==================== */
+  createStars();
+  resizeCanvas();
+  drawLegendItems();
+
+  // Dibuja el fondo animado en pantalla de inicio
+  let idleAnim = null;
+  function idleLoop(ts) {
+    if (gameState !== "start") return;
+    const dt = Math.min((ts - lastTime) / 1000, 0.033);
+    lastTime = ts;
+    updateStars(dt);
+    drawBackground();
+    idleAnim = requestAnimationFrame(idleLoop);
+  }
+  lastTime = performance.now();
+  idleAnim = requestAnimationFrame(idleLoop);
+
+  startBtn.addEventListener("click", () => {
+    if (idleAnim) { cancelAnimationFrame(idleAnim); idleAnim = null; }
+  }, { once: true });
+</script>
+</body>
+</html>
